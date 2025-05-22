@@ -84,38 +84,35 @@ get_installer() {
     
     # Скачиваем установщик
     if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
-        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz || {
+        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/quick_start.sh || {
             rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
-            error "Не удалось загрузить jumpserver-installer-${VERSION}"
+            error "Не удалось загрузить установщик JumpServer"
         }
         
-        # Распаковываем архив
-        tar -xf /opt/jumpserver-installer-${VERSION}.tar.gz -C /opt || {
-            rm -rf /opt/jumpserver-installer-${VERSION}
-            error "Не удалось распаковать jumpserver-installer-${VERSION}"
-        }
-        rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+        # Делаем скрипт исполняемым
+        chmod +x /opt/jumpserver-installer-${VERSION}.tar.gz
     fi
 }
 
 # Настройка и запуск установщика
 config_installer() {
     info "Настройка и запуск установщика..."
-    cd /opt/jumpserver-installer-${VERSION} || exit 1
+    cd /opt || exit 1
     
     # Настройка x-pack
     info "Настройка x-pack..."
-    cat > .env << EOF
+    cat > /opt/jumpserver-installer-${VERSION}/.env << EOF
 XPACK_ENABLED=${XPACK_ENABLED}
 XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION}
 XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID}
 EOF
     
     # Запускаем установку
-    ./jmsctl.sh install
-    
-    # Запускаем сервисы
-    ./jmsctl.sh start
+    if [ -f "/opt/jumpserver-installer-${VERSION}.tar.gz" ]; then
+        bash /opt/jumpserver-installer-${VERSION}.tar.gz
+    else
+        error "Установщик не найден"
+    fi
 }
 
 # Основная функция
