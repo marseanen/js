@@ -63,7 +63,7 @@ detect_os() {
 }
 
 # Функция установки пакетов
-function install_soft() {
+install_soft() {
     if command -v dnf &>/dev/null; then
         dnf -q -y install "$1"
     elif command -v yum &>/dev/null; then
@@ -84,34 +84,34 @@ function install_soft() {
 }
 
 # Подготовка к установке
-function prepare_install() {
+prepare_install() {
     for i in curl wget tar iptables; do
-        command -v $i &>/dev/null || install_soft $i
+        command -v "$i" &>/dev/null || install_soft "$i"
     done
 }
 
 # Получение установщика
-function get_installer() {
+get_installer() {
     echo "download install script to /opt/jumpserver-installer-${VERSION}"
     cd /opt || exit 1
     if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
-        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz || {
-            rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz "${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz" || {
+            rm -f "/opt/jumpserver-installer-${VERSION}.tar.gz"
             echo -e "[\033[31m ERROR \033[0m] Failed to download jumpserver-installer-${VERSION}"
             exit 1
         }
-        tar -xf /opt/jumpserver-installer-${VERSION}.tar.gz -C /opt || {
-            rm -rf /opt/jumpserver-installer-${VERSION}
+        tar -xf "/opt/jumpserver-installer-${VERSION}.tar.gz" -C /opt || {
+            rm -rf "/opt/jumpserver-installer-${VERSION}"
             echo -e "[\033[31m ERROR \033[0m] Failed to unzip jumpserver-installer-${VERSION}"
             exit 1
         }
-        rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+        rm -f "/opt/jumpserver-installer-${VERSION}.tar.gz"
     fi
 }
 
 # Настройка установщика
-function config_installer() {
-    cd /opt/jumpserver-installer-${VERSION} || exit 1
+config_installer() {
+    cd "/opt/jumpserver-installer-${VERSION}" || exit 1
     
     # Настройка x-pack
     echo "Configuring x-pack..."
@@ -132,7 +132,7 @@ EOF
 }
 
 # Основная функция
-function main() {
+main() {
     if [[ "${OS}" == 'Darwin' ]]; then
         echo
         echo "Unsupported Operating System Error"
