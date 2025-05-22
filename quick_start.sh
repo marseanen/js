@@ -7,6 +7,15 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PLAIN='\033[0m'
 
+# Версия JumpServer
+VERSION="v4.10.1"
+DOWNLOAD_URL="https://github.com/jumpserver/jumpserver/releases/download/${VERSION}"
+
+# Настройки x-pack (по умолчанию включен)
+XPACK_ENABLED=${XPACK_ENABLED:-"true"}
+XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION:-"ultimate"}
+XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID:-"true"}
+
 # Функции для вывода информации с цветом
 info() {
     echo -e "${GREEN}[INFO] $1${PLAIN}"
@@ -58,63 +67,69 @@ install_dependencies() {
     info "Установка необходимых пакетов..."
     if [ "$OS" = "Ubuntu" ]; then
         apt-get update
-        apt-get install -y python3-pip python3-venv git nginx supervisor curl
+        apt-get install -y curl wget tar iptables
     elif [ "$OS" = "CentOS Linux" ]; then
         yum install -y epel-release
-        yum install -y python3-pip python3-venv git nginx supervisor curl
+        yum install -y curl wget tar iptables
     fi
 }
 
-# Создание виртуального окружения Python
-create_venv() {
-    info "Создание виртуального окружения Python..."
-    python3 -m venv /opt/jumpserver/venv
-    source /opt/jumpserver/venv/bin/activate
-    pip install --upgrade pip
-}
-
-# Установка JumpServer
-install_jumpserver() {
-    info "Установка JumpServer..."
+# Получение установщика
+get_installer() {
+    info "Загрузка установщика JumpServer ${VERSION}..."
     
     # Создаем директорию для установки
-    mkdir -p /opt/jumpserver
-    cd /opt/jumpserver
+    mkdir -p /opt/jumpserver-installer-${VERSION}
+    cd /opt || exit 1
     
-    # Скачиваем скрипт установки
-    curl -sSL https://github.com/jumpserver/jumpserver/releases/download/v2.28.5/quick_start.sh > quick_start.sh
-    chmod +x quick_start.sh
-    
-    # Запускаем установку
-    ./quick_start.sh
-    
-    # Создаем x-pack директорию и конфигурацию
-    mkdir -p /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack
-    cat > /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack/_xpack.py << EOF
-XPACK_ENABLED = True
-XPACK_LICENSE_EDITION_ULTIMATE = True
-XPACK_LICENSE_IS_VALID = True
-EOF
+    # Скачиваем установщик
+    if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
+        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz || {
+            rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+            error "Не удалось загрузить jumpserver-installer-${VERSION}"
+        }
+        
+        # Распаковываем архив
+        tar -xf /opt/jumpserver-installer-${VERSION}.tar.gz -C /opt || {
+            rm -rf /opt/jumpserver-installer-${VERSION}
+            error "Не удалось распаковать jumpserver-installer-${VERSION}"
+        }
+        rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+    fi
 }
 
-# Настройка сервисов
-setup_services() {
-    info "Настройка системных сервисов..."
+# Настройка и запуск установщика
+config_installer() {
+    info "Настройка и запуск установщика..."
+    cd /opt/jumpserver-installer-${VERSION} || exit 1
     
-    # Перезапуск сервисов
-    systemctl restart nginx
-    systemctl restart supervisor
+    # Настройка x-pack
+    info "Настройка x-pack..."
+    cat > .env << EOF
+XPACK_ENABLED=${XPACK_ENABLED}
+XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION}
+XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID}
+EOF
+    
+    # Запускаем установку
+    ./jmsctl.sh install
+    
+    # Запускаем сервисы
+    ./jmsctl.sh start
 }
 
 # Основная функция
 main() {
-    info "Начало установки JumpServer..."
+    info "Начало установки JumpServer ${VERSION}..."
+    info "Настройки x-pack:"
+    info "- Включен: ${XPACK_ENABLED}"
+    info "- Издание: ${XPACK_LICENSE_EDITION}"
+    info "- Лицензия действительна: ${XPACK_LICENSE_IS_VALID}"
     
     detect_os
     install_dependencies
-    create_venv
-    install_jumpserver
-    setup_services
+    get_installer
+    config_installer
     
     info "Установка JumpServer завершена!"
     info "Доступ к веб-интерфейсу: http://your-server-ip"
