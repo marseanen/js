@@ -9,7 +9,7 @@ PLAIN='\033[0m'
 
 # Версия JumpServer
 VERSION="v4.10.1"
-DOWNLOAD_URL="https://github.com/jumpserver/jumpserver/releases/download/${VERSION}"
+DOWNLOAD_URL="https://github.com/jumpserver/installer/releases/download/${VERSION}"
 
 # Настройки x-pack (по умолчанию включен)
 XPACK_ENABLED=${XPACK_ENABLED:-"true"}
@@ -92,20 +92,26 @@ prepare_install() {
 
 # Получение установщика
 get_installer() {
-    echo "download install script to /opt/jumpserver-installer-${VERSION}"
+    echo "Downloading JumpServer installer ${VERSION}..."
     cd /opt || exit 1
+    
     if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
-        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz "${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz" || {
+        echo "Downloading from ${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz"
+        if ! timeout 60 wget -qO "/opt/jumpserver-installer-${VERSION}.tar.gz" "${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz"; then
             rm -f "/opt/jumpserver-installer-${VERSION}.tar.gz"
-            echo -e "[\033[31m ERROR \033[0m] Failed to download jumpserver-installer-${VERSION}"
-            exit 1
-        }
-        tar -xf "/opt/jumpserver-installer-${VERSION}.tar.gz" -C /opt || {
+            error "Failed to download jumpserver-installer-${VERSION}. Please check your internet connection and try again."
+        fi
+        
+        echo "Extracting installer..."
+        if ! tar -xf "/opt/jumpserver-installer-${VERSION}.tar.gz" -C /opt; then
             rm -rf "/opt/jumpserver-installer-${VERSION}"
-            echo -e "[\033[31m ERROR \033[0m] Failed to unzip jumpserver-installer-${VERSION}"
-            exit 1
-        }
+            error "Failed to extract jumpserver-installer-${VERSION}. The downloaded file might be corrupted."
+        fi
+        
         rm -f "/opt/jumpserver-installer-${VERSION}.tar.gz"
+        echo "Installer downloaded and extracted successfully."
+    else
+        echo "Installer directory already exists at /opt/jumpserver-installer-${VERSION}"
     fi
 }
 
