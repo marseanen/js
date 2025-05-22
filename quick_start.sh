@@ -109,6 +109,12 @@ EOF
     
     # Запускаем установку
     if [ -f "/opt/jumpserver/quick_start.sh" ]; then
+        # Экспортируем переменные окружения для x-pack
+        export XPACK_ENABLED
+        export XPACK_LICENSE_EDITION
+        export XPACK_LICENSE_IS_VALID
+        
+        # Запускаем установщик
         bash /opt/jumpserver/quick_start.sh
     else
         error "Установщик не найден"
