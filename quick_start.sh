@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-# 颜色输出
+# Цвета для вывода
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PLAIN='\033[0m'
 
-# 输出带颜色的信息
+# Функции для вывода информации с цветом
 info() {
     echo -e "${GREEN}[INFO] $1${PLAIN}"
 }
@@ -18,147 +18,121 @@ warn() {
 
 error() {
     echo -e "${RED}[ERROR] $1${PLAIN}"
+    exit 1
 }
 
-# 检查是否为root用户
-if [ "$(id -u)" != "0" ]; then
-    error "请使用root用户运行此脚本"
-    exit 1
+# Проверка на root пользователя
+if [ "$EUID" -ne 0 ]; then
+    error "Пожалуйста, запустите скрипт с правами root"
 fi
 
-# 检查系统要求
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    OS=$NAME
-    VERSION=$VERSION_ID
-else
-    error "无法检测操作系统"
-    exit 1
-fi
+# Проверка требований системы
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$NAME
+        VERSION=$VERSION_ID
+    else
+        error "Не удалось определить операционную систему"
+    fi
 
-# 检查系统版本
-if [ "$OS" != "Ubuntu" ] && [ "$OS" != "CentOS Linux" ]; then
-    error "不支持的操作系统: $OS"
-    exit 1
-fi
+    case $OS in
+        "Ubuntu")
+            if [ "$VERSION" != "20.04" ] && [ "$VERSION" != "22.04" ]; then
+                error "Неподдерживаемая версия Ubuntu: $OS $VERSION"
+            fi
+            ;;
+        "CentOS Linux")
+            if [ "$VERSION" != "7" ] && [ "$VERSION" != "8" ]; then
+                error "Неподдерживаемая версия CentOS: $OS $VERSION"
+            fi
+            ;;
+        *)
+            error "Неподдерживаемая операционная система: $OS"
+            ;;
+    esac
+}
 
-# 安装依赖
+# Установка зависимостей
 install_dependencies() {
-    info "正在安装依赖..."
+    info "Установка необходимых пакетов..."
     if [ "$OS" = "Ubuntu" ]; then
-        apt update
-        apt install -y python3 python3-pip python3-venv git curl wget
+        apt-get update
+        apt-get install -y python3-pip python3-venv git nginx supervisor
     elif [ "$OS" = "CentOS Linux" ]; then
-        yum install -y python3 python3-pip git curl wget
+        yum install -y epel-release
+        yum install -y python3-pip python3-venv git nginx supervisor
     fi
 }
 
-# 创建虚拟环境
+# Создание виртуального окружения Python
 create_venv() {
-    info "正在创建Python虚拟环境..."
-    python3 -m venv /opt/jumpserver
-    source /opt/jumpserver/bin/activate
+    info "Создание виртуального окружения Python..."
+    python3 -m venv /opt/jumpserver/venv
+    source /opt/jumpserver/venv/bin/activate
     pip install --upgrade pip
 }
 
-# 克隆仓库
+# Клонирование репозитория
 clone_repo() {
-    info "正在克隆JumpServer仓库..."
+    info "Клонирование репозитория JumpServer..."
+    
     if [ -d "/opt/jumpserver/jumpserver" ]; then
-        warn "JumpServer目录已存在，正在更新..."
-        cd /opt/jumpserver/jumpserver
-        git pull
-    else
-        cd /opt/jumpserver
-        git clone https://github.com/marseanen/jumpserver.git
+        warn "Директория JumpServer уже существует, обновляем..."
+        rm -rf /opt/jumpserver/jumpserver
     fi
+    
+    git clone https://github.com/jumpserver/jumpserver.git /opt/jumpserver/jumpserver
+    cd /opt/jumpserver/jumpserver
+    
+    # Создание директории x-pack
+    mkdir -p /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack
+    
+    # Создание конфигурации x-pack
+    cat > /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack/_xpack.py << EOF
+XPACK_ENABLED = True
+XPACK_LICENSE_EDITION_ULTIMATE = True
+XPACK_LICENSE_IS_VALID = True
+EOF
 }
 
-# 安装JumpServer
+# Установка JumpServer
 install_jumpserver() {
-    info "正在安装JumpServer..."
+    info "Установка JumpServer..."
     cd /opt/jumpserver/jumpserver
     pip install -r requirements/requirements.txt
-    python3 manage.py compilemessages
     python3 manage.py migrate
     python3 manage.py init_db
 }
 
-# 配置服务
+# Настройка сервисов
 setup_services() {
-    info "正在配置服务..."
-    cp /opt/jumpserver/jumpserver/install/nginx/jumpserver.conf /etc/nginx/conf.d/
-    cp /opt/jumpserver/jumpserver/install/supervisor/jumpserver.conf /etc/supervisor/conf.d/
+    info "Настройка системных сервисов..."
+    cp /opt/jumpserver/jumpserver/config_examples/nginx/jumpserver.conf /etc/nginx/conf.d/
+    cp /opt/jumpserver/jumpserver/config_examples/supervisor/jumpserver.conf /etc/supervisor/conf.d/
     
-    # 重启服务
+    # Перезапуск сервисов
     systemctl restart nginx
-    systemctl restart supervisord
+    systemctl restart supervisor
 }
 
-# 配置x-pack
-setup_xpack() {
-    info "正在配置x-pack..."
-    
-    # 创建x-pack目录
-    mkdir -p /opt/jumpserver/jumpserver/xpack
-    
-    # 修改settings/_xpack.py
-    cat > /opt/jumpserver/jumpserver/apps/jumpserver/settings/_xpack.py << 'EOF'
-# -*- coding: utf-8 -*-
-
-import datetime
-import os
-
-from .base import INSTALLED_APPS, TEMPLATES
-from .. import const
-
-current_year = datetime.datetime.now().year
-corporation = f'FIT2CLOUD 飞致云 © 2014-{current_year}'
-
-XPACK_DIR = os.path.join(const.BASE_DIR, 'xpack')
-XPACK_DISABLED = False
-XPACK_ENABLED = True
-XPACK_TEMPLATES_DIR = []
-XPACK_CONTEXT_PROCESSOR = []
-XPACK_LICENSE_IS_VALID = True
-XPACK_LICENSE_EDITION = "ultimate"
-XPACK_LICENSE_EDITION_ULTIMATE = True
-XPACK_LICENSE_INFO = {
-    'corporation': corporation,
-}
-
-XPACK_LICENSE_CONTENT = 'ultimate'
-
-if XPACK_ENABLED:
-    from xpack.utils import get_xpack_templates_dir, get_xpack_context_processor
-
-    INSTALLED_APPS.insert(0, 'xpack.apps.XpackConfig')
-    XPACK_TEMPLATES_DIR = get_xpack_templates_dir(const.BASE_DIR)
-    XPACK_CONTEXT_PROCESSOR = get_xpack_context_processor()
-    TEMPLATES[0]['DIRS'].extend(XPACK_TEMPLATES_DIR)
-    TEMPLATES[0]['OPTIONS']['context_processors'].extend(XPACK_CONTEXT_PROCESSOR)
-EOF
-
-    info "x-pack配置完成"
-}
-
-# 主函数
+# Основная функция
 main() {
-    info "开始安装JumpServer..."
+    info "Начало установки JumpServer..."
     
+    detect_os
     install_dependencies
     create_venv
     clone_repo
     install_jumpserver
-    setup_xpack
     setup_services
     
-    info "JumpServer安装完成！"
-    info "请访问 http://your-server-ip 进行访问"
-    info "默认管理员账号: admin"
-    info "默认管理员密码: admin"
-    warn "请及时修改默认密码！"
+    info "Установка JumpServer завершена!"
+    info "Доступ к веб-интерфейсу: http://your-server-ip"
+    info "Логин администратора по умолчанию: admin"
+    info "Пароль администратора по умолчанию: admin"
+    warn "Рекомендуется немедленно изменить пароль по умолчанию!"
 }
 
-# 执行主函数
+# Запуск основной функции
 main 
