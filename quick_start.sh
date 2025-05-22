@@ -62,84 +62,68 @@ detect_os() {
     esac
 }
 
-# Установка зависимостей
-install_dependencies() {
-    info "Установка необходимых пакетов..."
-    if [ "$OS" = "Ubuntu" ]; then
-        apt-get update
-        apt-get install -y curl wget tar iptables
-    elif [ "$OS" = "CentOS Linux" ]; then
-        yum install -y epel-release
-        yum install -y curl wget tar iptables
+# Функция установки пакетов
+function install_soft() {
+    if command -v dnf &>/dev/null; then
+        dnf -q -y install "$1"
+    elif command -v yum &>/dev/null; then
+        yum -q -y install "$1"
+    elif command -v apt &>/dev/null; then
+        apt-get -qqy install "$1"
+    elif command -v zypper &>/dev/null; then
+        zypper -q -n install "$1"
+    elif command -v apk &>/dev/null; then
+        apk add -q "$1"
+        command -v gettext &>/dev/null || { apk add -q gettext-dev python3 }
+    else
+        echo -e "[\033[31m ERROR \033[0m] $1 command not found, Please install it first"
+        exit 1
     fi
+}
+
+# Подготовка к установке
+function prepare_install() {
+    for i in curl wget tar iptables; do
+        command -v $i &>/dev/null || install_soft $i
+    done
 }
 
 # Получение установщика
-get_installer() {
-    info "Загрузка установщика JumpServer ${VERSION}..."
-    
-    # Создаем директорию для установки
-    mkdir -p /opt/jumpserver
-    cd /opt/jumpserver || exit 1
-    
-    # Скачиваем установщик
-    if [ ! -f "/opt/jumpserver/quick_start.sh" ]; then
-        timeout 60 wget -qO quick_start.sh ${DOWNLOAD_URL}/quick_start.sh || {
-            rm -f /opt/jumpserver/quick_start.sh
-            error "Не удалось загрузить установщик JumpServer"
+function get_installer() {
+    echo "download install script to /opt/jumpserver-installer-${VERSION}"
+    cd /opt || exit 1
+    if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
+        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/jumpserver-installer-${VERSION}.tar.gz || {
+            rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+            echo -e "[\033[31m ERROR \033[0m] Failed to download jumpserver-installer-${VERSION}"
+            exit 1
         }
-        
-        # Делаем скрипт исполняемым
-        chmod +x /opt/jumpserver/quick_start.sh
+        tar -xf /opt/jumpserver-installer-${VERSION}.tar.gz -C /opt || {
+            rm -rf /opt/jumpserver-installer-${VERSION}
+            echo -e "[\033[31m ERROR \033[0m] Failed to unzip jumpserver-installer-${VERSION}"
+            exit 1
+        }
+        rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
     fi
 }
 
-# Настройка и запуск установщика
-config_installer() {
-    info "Настройка и запуск установщика..."
-    cd /opt/jumpserver || exit 1
-    
-    # Настройка x-pack
-    info "Настройка x-pack..."
-    cat > /opt/jumpserver/.env << EOF
-XPACK_ENABLED=${XPACK_ENABLED}
-XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION}
-XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID}
-EOF
-    
-    # Запускаем установку
-    if [ -f "/opt/jumpserver/quick_start.sh" ]; then
-        # Экспортируем переменные окружения для x-pack
-        export XPACK_ENABLED
-        export XPACK_LICENSE_EDITION
-        export XPACK_LICENSE_IS_VALID
-        
-        # Запускаем установщик
-        bash /opt/jumpserver/quick_start.sh
-    else
-        error "Установщик не найден"
-    fi
+# Настройка установщика
+function config_installer() {
+    cd /opt/jumpserver-installer-${VERSION} || exit 1
+    ./jmsctl.sh install
+    ./jmsctl.sh start
 }
 
 # Основная функция
-main() {
-    info "Начало установки JumpServer ${VERSION}..."
-    info "Настройки x-pack:"
-    info "- Включен: ${XPACK_ENABLED}"
-    info "- Издание: ${XPACK_LICENSE_EDITION}"
-    info "- Лицензия действительна: ${XPACK_LICENSE_IS_VALID}"
-    
-    detect_os
-    install_dependencies
+function main() {
+    if [[ "${OS}" == 'Darwin' ]]; then
+        echo
+        echo "Unsupported Operating System Error"
+        exit 1
+    fi
+    prepare_install
     get_installer
     config_installer
-    
-    info "Установка JumpServer завершена!"
-    info "Доступ к веб-интерфейсу: http://your-server-ip"
-    info "Логин администратора по умолчанию: admin"
-    info "Пароль администратора по умолчанию: admin"
-    warn "Рекомендуется немедленно изменить пароль по умолчанию!"
 }
 
-# Запуск основной функции
 main 
