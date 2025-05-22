@@ -110,6 +110,21 @@ function get_installer() {
 # Настройка установщика
 function config_installer() {
     cd /opt/jumpserver-installer-${VERSION} || exit 1
+    
+    # Настройка x-pack
+    echo "Configuring x-pack..."
+    cat > .env << EOF
+XPACK_ENABLED=${XPACK_ENABLED}
+XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION}
+XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID}
+EOF
+    
+    # Экспортируем переменные окружения
+    export XPACK_ENABLED
+    export XPACK_LICENSE_EDITION
+    export XPACK_LICENSE_IS_VALID
+    
+    # Запускаем установку
     ./jmsctl.sh install
     ./jmsctl.sh start
 }
@@ -121,6 +136,12 @@ function main() {
         echo "Unsupported Operating System Error"
         exit 1
     fi
+    
+    echo "Starting JumpServer installation with x-pack settings:"
+    echo "- Enabled: ${XPACK_ENABLED}"
+    echo "- Edition: ${XPACK_LICENSE_EDITION}"
+    echo "- License Valid: ${XPACK_LICENSE_IS_VALID}"
+    
     prepare_install
     get_installer
     config_installer
