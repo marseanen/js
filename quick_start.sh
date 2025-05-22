@@ -58,10 +58,10 @@ install_dependencies() {
     info "Установка необходимых пакетов..."
     if [ "$OS" = "Ubuntu" ]; then
         apt-get update
-        apt-get install -y python3-pip python3-venv git nginx supervisor
+        apt-get install -y python3-pip python3-venv git nginx supervisor curl
     elif [ "$OS" = "CentOS Linux" ]; then
         yum install -y epel-release
-        yum install -y python3-pip python3-venv git nginx supervisor
+        yum install -y python3-pip python3-venv git nginx supervisor curl
     fi
 }
 
@@ -73,22 +73,23 @@ create_venv() {
     pip install --upgrade pip
 }
 
-# Клонирование репозитория
-clone_repo() {
-    info "Клонирование репозитория JumpServer..."
+# Установка JumpServer
+install_jumpserver() {
+    info "Установка JumpServer..."
     
-    if [ -d "/opt/jumpserver/jumpserver" ]; then
-        warn "Директория JumpServer уже существует, обновляем..."
-        rm -rf /opt/jumpserver/jumpserver
-    fi
+    # Создаем директорию для установки
+    mkdir -p /opt/jumpserver
+    cd /opt/jumpserver
     
-    git clone https://github.com/jumpserver/jumpserver.git /opt/jumpserver/jumpserver
-    cd /opt/jumpserver/jumpserver
+    # Скачиваем скрипт установки
+    curl -sSL https://github.com/jumpserver/jumpserver/releases/download/v2.28.5/quick_start.sh > quick_start.sh
+    chmod +x quick_start.sh
     
-    # Создание директории x-pack
+    # Запускаем установку
+    ./quick_start.sh
+    
+    # Создаем x-pack директорию и конфигурацию
     mkdir -p /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack
-    
-    # Создание конфигурации x-pack
     cat > /opt/jumpserver/jumpserver/apps/jumpserver/conf/xpack/_xpack.py << EOF
 XPACK_ENABLED = True
 XPACK_LICENSE_EDITION_ULTIMATE = True
@@ -96,20 +97,9 @@ XPACK_LICENSE_IS_VALID = True
 EOF
 }
 
-# Установка JumpServer
-install_jumpserver() {
-    info "Установка JumpServer..."
-    cd /opt/jumpserver/jumpserver
-    pip install -r requirements/requirements.txt
-    python3 manage.py migrate
-    python3 manage.py init_db
-}
-
 # Настройка сервисов
 setup_services() {
     info "Настройка системных сервисов..."
-    cp /opt/jumpserver/jumpserver/config_examples/nginx/jumpserver.conf /etc/nginx/conf.d/
-    cp /opt/jumpserver/jumpserver/config_examples/supervisor/jumpserver.conf /etc/supervisor/conf.d/
     
     # Перезапуск сервисов
     systemctl restart nginx
@@ -123,7 +113,6 @@ main() {
     detect_os
     install_dependencies
     create_venv
-    clone_repo
     install_jumpserver
     setup_services
     
