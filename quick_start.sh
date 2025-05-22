@@ -79,37 +79,37 @@ get_installer() {
     info "Загрузка установщика JumpServer ${VERSION}..."
     
     # Создаем директорию для установки
-    mkdir -p /opt/jumpserver-installer-${VERSION}
-    cd /opt || exit 1
+    mkdir -p /opt/jumpserver
+    cd /opt/jumpserver || exit 1
     
     # Скачиваем установщик
-    if [ ! -d "/opt/jumpserver-installer-${VERSION}" ]; then
-        timeout 60 wget -qO jumpserver-installer-${VERSION}.tar.gz ${DOWNLOAD_URL}/quick_start.sh || {
-            rm -f /opt/jumpserver-installer-${VERSION}.tar.gz
+    if [ ! -f "/opt/jumpserver/quick_start.sh" ]; then
+        timeout 60 wget -qO quick_start.sh ${DOWNLOAD_URL}/quick_start.sh || {
+            rm -f /opt/jumpserver/quick_start.sh
             error "Не удалось загрузить установщик JumpServer"
         }
         
         # Делаем скрипт исполняемым
-        chmod +x /opt/jumpserver-installer-${VERSION}.tar.gz
+        chmod +x /opt/jumpserver/quick_start.sh
     fi
 }
 
 # Настройка и запуск установщика
 config_installer() {
     info "Настройка и запуск установщика..."
-    cd /opt || exit 1
+    cd /opt/jumpserver || exit 1
     
     # Настройка x-pack
     info "Настройка x-pack..."
-    cat > /opt/jumpserver-installer-${VERSION}/.env << EOF
+    cat > /opt/jumpserver/.env << EOF
 XPACK_ENABLED=${XPACK_ENABLED}
 XPACK_LICENSE_EDITION=${XPACK_LICENSE_EDITION}
 XPACK_LICENSE_IS_VALID=${XPACK_LICENSE_IS_VALID}
 EOF
     
     # Запускаем установку
-    if [ -f "/opt/jumpserver-installer-${VERSION}.tar.gz" ]; then
-        bash /opt/jumpserver-installer-${VERSION}.tar.gz
+    if [ -f "/opt/jumpserver/quick_start.sh" ]; then
+        bash /opt/jumpserver/quick_start.sh
     else
         error "Установщик не найден"
     fi
