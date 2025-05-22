@@ -64,17 +64,17 @@ detect_os() {
 
 # Функция установки пакетов
 install_soft() {
-    if command -v dnf &>/dev/null; then
+    if command -v dnf >/dev/null 2>&1; then
         dnf -q -y install "$1"
-    elif command -v yum &>/dev/null; then
+    elif command -v yum >/dev/null 2>&1; then
         yum -q -y install "$1"
-    elif command -v apt &>/dev/null; then
+    elif command -v apt >/dev/null 2>&1; then
         apt-get -qqy install "$1"
-    elif command -v zypper &>/dev/null; then
+    elif command -v zypper >/dev/null 2>&1; then
         zypper -q -n install "$1"
-    elif command -v apk &>/dev/null; then
+    elif command -v apk >/dev/null 2>&1; then
         apk add -q "$1"
-        if ! command -v gettext &>/dev/null; then
+        if ! command -v gettext >/dev/null 2>&1; then
             apk add -q gettext-dev python3
         fi
     else
